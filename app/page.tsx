@@ -6,7 +6,7 @@ type Log = { id: string; date: string; input: string; content: string; reflectio
 const quickActions = ["异常处理", "AOI分析", "SPI分析", "供应商管理", "QMS维护", "控制计划审核", "质量改善"];
 const quickText: Record<string, string> = { "异常处理": "现场发现制程异常，确认不良品并跟进处理", "AOI分析": "AOI发现焊接不良，协助分析原因", "SPI分析": "SPI检测锡膏异常", "供应商管理": "供应商来料不良处理", "QMS维护": "QMS系统维护", "控制计划审核": "核对控制计划", "质量改善": "跟进异常改善" };
 const today = () => new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" });
-const count = (v: string) => v.replace(/\s/g, "").length;
+const count = (v: string) => (v.match(/[\u4e00-\u9fff\u3001-\u303f\uff00-\uffef]/g) || []).length;
 
 export default function Home() {
   const [input, setInput] = useState(""); const [content, setContent] = useState(""); const [reflection, setReflection] = useState("");
@@ -21,7 +21,9 @@ export default function Home() {
     if (!input.trim()) return notify("请先输入今日工作内容"); setLoading(true);
     try {
       const result = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }) }).then(r => r.json());
-      const log = { id: crypto.randomUUID(), date: today(), input, content: result.content || "", reflection: result.reflection || "" };
+      if (result.error) { notify(result.error); return; }
+      if (result.warning) notify(result.warning);
+      const log = { id: crypto.randomUUID(), date: today(), input, content: result.workContent || "", reflection: result.reflection || "" };
       setContent(log.content); setReflection(log.reflection);
       if (cloudReady) { const saved = await fetch("/api/logs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date: log.date, inputText: log.input, workContent: log.content, workThought: log.reflection }) }).then(r => r.json()); if (!saved.log) throw new Error(saved.error || "保存失败"); log.id = saved.log.id; }
       persist([log, ...logs]); notify(cloudReady ? "日志已生成并保存到云端" : "日志已生成并保存");
